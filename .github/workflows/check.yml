@@ -1,0 +1,53 @@
+name: UPPSC Selected Candidates Monitor
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+
+  workflow_dispatch:
+
+# Prevent two runs from changing the state at the same time.
+concurrency:
+  group: uppsc-selected-candidates-monitor
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Check UPPSC page
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+        run: python check.py
+
+      - name: Save monitoring state
+        run: |
+          if [ -z "$(git status --porcelain -- uppsc_sent_updates.json)" ]; then
+            echo "No state change to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add uppsc_sent_updates.json
+          git commit -m "Update UPPSC monitor state"
+          git push
